@@ -14,7 +14,9 @@ from morgenmcp.tools.id_registry import clear_registry
 
 
 @pytest.fixture(autouse=True)
-def clear_ids():
+def _use_tmp_data_dir(tmp_path, monkeypatch):
+    """Point persistent store at a temp directory during MCP protocol tests."""
+    monkeypatch.setenv("MORGENMCP_DATA_DIR", str(tmp_path))
     clear_registry()
     yield
     clear_registry()

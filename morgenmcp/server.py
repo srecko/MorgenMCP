@@ -1,7 +1,10 @@
 """FastMCP server for Morgen calendar API."""
 
+import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastmcp import FastMCP
 
@@ -16,15 +19,54 @@ from morgenmcp.tools.events import (
     update_event,
 )
 
+logger = logging.getLogger(__name__)
+
+_ID_STORE_DIR = "id_store"
+_ID_COLLECTION = "id_mappings"
+
+
+def _get_data_dir() -> Path:
+    """Return the data directory for persistent storage."""
+    env_dir = os.environ.get("MORGENMCP_DATA_DIR")
+    if env_dir:
+        return Path(env_dir)
+
+    import platformdirs
+
+    return Path(platformdirs.user_data_dir("morgenmcp"))
+
 
 @asynccontextmanager
 async def lifespan(server: FastMCP) -> AsyncIterator[None]:
-    """Initialize and clean up the Morgen HTTP client."""
+    """Initialize and clean up the Morgen HTTP client and persistent ID store."""
     from morgenmcp.client import get_client
+    from morgenmcp.tools.id_registry import load_from_store, set_store
+
+    # Initialize persistent ID store
+    try:
+        from key_value.aio.stores.filetree import FileTreeStore
+
+        data_dir = _get_data_dir() / _ID_STORE_DIR
+        store = FileTreeStore(
+            data_directory=data_dir,
+            default_collection=_ID_COLLECTION,
+        )
+        await store.setup()
+        set_store(store)
+        count = await load_from_store(data_dir, _ID_COLLECTION)
+        if count:
+            logger.info("Loaded %d persisted ID mappings", count)
+    except Exception:
+        logger.warning(
+            "Failed to initialize persistent ID store, continuing without persistence",
+            exc_info=True,
+        )
+        set_store(None)
 
     try:
         yield
     finally:
+        set_store(None)
         client = get_client()
         await client.close()
 

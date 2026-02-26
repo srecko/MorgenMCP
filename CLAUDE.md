@@ -35,7 +35,7 @@ FastMCP-based MCP server wrapping the Morgen calendar API (https://api.morgen.so
 - **`validators.py`** - Input validation (datetime, duration, timezone, email, color)
 - **`tools/`** - Tool implementations:
   - `accounts.py`, `calendars.py`, `events.py` - MCP tool functions
-  - `id_registry.py` - Virtual ID ↔ real ID bidirectional mapping
+  - `id_registry.py` - Virtual ID ↔ real ID bidirectional mapping with disk persistence
   - `id_utils.py` - Extract account/calendar IDs from encoded Morgen IDs
   - `utils.py` - Shared helpers (`filter_none_values`, `handle_tool_errors`)
 
@@ -71,19 +71,25 @@ This allows deriving account_id and calendar_id from event_id without caching.
 
 Tools expose 7-character Base64url virtual IDs (e.g., `aB-9xZ_`) instead of raw Morgen IDs for token efficiency. The `id_registry` module handles mapping between virtual and real IDs. Character set: `A-Za-z0-9-_`.
 
-Virtual IDs are **session-scoped** (module-level dicts, not persisted). Restarting the server loses all mappings. LLMs must call list tools (e.g., `list_calendars`, `list_events`) before using IDs in write operations.
+Virtual IDs are **deterministic** (`MD5(real_id)`) and **persisted to disk** via `py-key-value-aio`'s `FileTreeStore`. Reads are sync in-memory dict lookups; writes are fire-and-forget async write-through to the store. On startup, the server lifespan loads all persisted mappings into memory, so IDs survive server restarts without re-listing.
+
+- **Storage location**: `~/Library/Application Support/morgenmcp/id_store/` (via `platformdirs.user_data_dir`)
+- **Override**: Set `MORGENMCP_DATA_DIR` env var to use a custom directory
+- **Graceful degradation**: If the store fails to initialize, the server continues with in-memory-only IDs (session-scoped)
+- **Tests**: Persistence is disabled by an `autouse` conftest fixture (`set_store(None)`)
 
 ### Testing
 
 - **Tool tests** (`test_tools.py`): Mock via `patch("morgenmcp.tools.*.get_client")`
 - **Client tests** (`test_client.py`): Mock HTTP via `@respx.mock` decorator on test methods
-- **MCP protocol tests** (`test_mcp_server.py`): In-memory protocol-level tests using `fastmcp.Client(mcp)` — verifies tool registration, annotations, and end-to-end call flow
+- **MCP protocol tests** (`test_mcp_server.py`): In-memory protocol-level tests using `fastmcp.Client(mcp)` — verifies tool registration, annotations, and end-to-end call flow. Uses `MORGENMCP_DATA_DIR=tmp_path` to isolate the persistent store.
+- **Persistence tests** (`test_id_persistence.py`): Tests FileTreeStore write-through and cross-session restore using real temp-dir-backed stores
 - **Integration tests** (`test_integration.py`): Hit real API, excluded from CI via pytest marker
 
 ### Environment
 
 - Python `>= 3.14` (set in `pyproject.toml`)
-- `fastmcp==3.0.0` — pinned to stable release
+- `fastmcp>=3.0,<3.1` — pinned to 3.0.x patch range
 
 ## Versioning & Release
 
