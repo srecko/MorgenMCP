@@ -89,7 +89,7 @@ Virtual IDs are **deterministic** (`MD5(real_id)`) and **persisted to disk** via
 ### Environment
 
 - Python `>= 3.14` (set in `pyproject.toml`)
-- `fastmcp>=3.0,<3.1` — pinned to 3.0.x patch range
+- `fastmcp>=3.1,<3.2` — pinned to 3.1.x patch range
 
 ## Versioning & Release
 
@@ -104,23 +104,32 @@ Users reference tags in their MCP client config: `git+https://github.com/k3KAW8P
 
 ## Documentation Resources
 
-Five documentation sources are available. Use them in combination to get accurate, up-to-date information.
+**IMPORTANT: Always use the local docs submodules as the primary source of truth.** They are version-pinned to match the exact dependency versions in this project. Online docs may describe newer or older API versions that do not match what this project uses. Only fall back to online docs when local docs are insufficient.
 
-| Source | URL / Path | What it covers |
-|--------|-----------|----------------|
-| **Morgen API** (online) | https://docs.morgen.so/ | Endpoints, parameters, schemas, changelog |
-| **Morgen API** (local) | `docs/morgen-dev-docs/content/*.mdx` | Same content, readable offline. Use the `morgen-api-docs` agent for lookups |
-| **FastMCP** (online) | https://gofastmcp.com/llms.txt | Server framework (latest version, requires network) |
-| **FastMCP** (local) | `docs/fastmcp/docs/` | Same content, readable offline. Use the `fastmcp-docs` agent for lookups |
-| **MCP Protocol** | https://modelcontextprotocol.io/llms.txt | Protocol spec: transports, tool schema, JSON-RPC messages |
+When spawning Explore agents, **always include this instruction in the prompt**: _"For Morgen API questions, search `docs/morgen-dev-docs/content/` first. For FastMCP questions, search `docs/fastmcp/docs/` first. These local docs match the pinned dependency versions and take priority over online sources."_
+
+### Local docs (primary — version-pinned, always available)
+
+| Source | Path | Agent | Covers |
+|--------|------|-------|--------|
+| **Morgen API** | `docs/morgen-dev-docs/content/*.mdx` | `morgen-api-docs` | Endpoints, parameters, schemas, changelog |
+| **FastMCP** | `docs/fastmcp/docs/` | `fastmcp-docs` | Server framework: tools, context, auth, testing, deployment |
 
 - **Morgen docs submodule**: `f977d08` (updated automatically by SessionStart hook)
-- **FastMCP docs submodule**: `v3.0.0` / `92f4c503` (updated automatically by SessionStart hook)
+- **FastMCP docs submodule**: `v3.1.1` / `53dab031` — matches `fastmcp>=3.1,<3.2` pin (updated automatically by SessionStart hook)
 
-### How to use these sources
+### Online docs (fallback only)
 
-- **Before implementing or modifying any tool**, look up the relevant Morgen API endpoint in both the online docs and the local MDX files to confirm parameters, required fields, and response shapes. The online docs may be newer; the local submodule is version-pinned and always available.
-- **For FastMCP patterns** (tool registration, return types, error handling, testing), use the `fastmcp-docs` agent — it searches `docs/fastmcp/docs/` (v3 only) and returns file paths, line numbers, and code examples. Fall back to `https://gofastmcp.com/llms.txt` if local docs are insufficient.
-- **For MCP protocol questions** (transport, JSON-RPC, tool schema), fetch `https://modelcontextprotocol.io/llms.txt` first, then the relevant spec page.
-- **Use the `morgen-api-docs` agent** (read-only) for Morgen API questions — it searches `docs/morgen-dev-docs/content/` and returns file paths, line numbers, and direct quotes. For cross-referencing, run it in parallel with a WebFetch of the online docs.
-- **When adding a new tool or changing tool signatures**, check both FastMCP docs (for decorator/return-type patterns) and the MCP protocol spec (for schema requirements) to ensure compliance.
+| Source | URL | When to use |
+|--------|-----|-------------|
+| **Morgen API** | https://docs.morgen.so/ | Only if local MDX files lack the endpoint or field you need |
+| **FastMCP** | https://gofastmcp.com/llms.txt | Only if local docs under `docs/fastmcp/docs/` don't cover the topic |
+| **MCP Protocol** | https://modelcontextprotocol.io/llms.txt | Protocol spec: transports, tool schema, JSON-RPC messages (no local copy) |
+
+### Lookup rules
+
+1. **Before implementing or modifying any tool**: Use the `morgen-api-docs` agent to look up the relevant Morgen API endpoint in the local MDX files. Confirm parameters, required fields, and response shapes. Only cross-reference online docs if the local result is incomplete.
+2. **For FastMCP patterns** (tool registration, return types, error handling, testing): Use the `fastmcp-docs` agent — it searches `docs/fastmcp/docs/` and returns file paths, line numbers, and code examples. These docs match the installed FastMCP version exactly.
+3. **For MCP protocol questions** (transport, JSON-RPC, tool schema): Fetch `https://modelcontextprotocol.io/llms.txt` first, then the relevant spec page (no local copy exists).
+4. **When adding a new tool or changing tool signatures**: Check both FastMCP local docs (for decorator/return-type patterns) and the MCP protocol spec (for schema requirements) to ensure compliance.
+5. **When spawning any agent** (Explore, Plan, or general-purpose) that may need API or framework information: Include the local doc paths and agent names in the prompt so the subagent searches them directly rather than guessing or using online sources.
